@@ -1,0 +1,20 @@
+# 忽略 Python 缓存文件
+__pycache__/
+*.pyc
+
+# 忽略 Node.js 依赖目录
+node_modules/
+
+# 忽略 Git 相关文件
+.git/
+.gitignore
+
+# 忽略环境变量文件
+.env
+
+# 忽略日志文件
+*.log
+
+# 忽略临时文件
+temp/
+*.tmp

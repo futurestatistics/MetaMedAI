@@ -1,0 +1,32 @@
+# 忽略所有 .env 文件
+.env*
+#忽略配置文件
+*.yaml
+
+# 忽略 Python 缓存文件
+__pycache__/
+*.pyc
+*.pyo
+
+# 忽略 IDE 配置文件
+.vscode/
+.idea/
+
+# 忽略日志文件
+*.log
+
+# 忽略临时文件
+*.tmp
+*.temp
+
+
+# 忽略特定配置文件（如自定义的 config.local.json）
+config.local.json
+
+# 忽略本地开发目录
+/local_data/
+/cache/
+
+# 忽略临时文件
+plots/
+reports/

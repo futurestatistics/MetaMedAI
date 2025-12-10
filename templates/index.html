@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>MetaMedAI</title>
+    <style>
+        body {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+        }
+        .container {
+            margin-top: 30px;
+        }
+        .input-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            font-size: 14px;
+        }
+        input, select {
+            width: 100%;
+            padding: 10px;
+            font-size: 16px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        button {
+            padding: 12px 24px;
+            font-size: 16px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        #result {
+            margin-top: 30px;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            display: none;
+            white-space: pre-wrap;
+        }
+        .success {
+            color: green;
+        }
+        .error {
+            color: red;
+        }
+        .warning {
+            color: orange;
+        }
+        .config-group {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+        }
+        pre {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+        .hint {
+            font-size: 12px;
+            color: #666;
+            margin-top: 3px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>MetaMedAI——医学文献检索总结助手</h1>
+        
+        <!-- 新增配置输入区域 -->
+        <div class="config-group">
+            <h3>🔧 Agent 配置</h3>
+            <div class="input-group">
+                <label for="apiKey">LLM API Key</label>
+                <input type="text" id="apiKey" placeholder="请输入通义千问API Key">
+            </div>
+            <div class="input-group">
+                <label for="baseUrl">LLM Base URL</label>
+                <input type="text" id="baseUrl" placeholder="请输入API Base URL（如：https://dashscope.aliyuncs.com/compatible-mode/v1）">
+            </div>
+            <div class="input-group">
+                <label for="modelName">通义千问模型名称</label>
+                <input type="text" id="modelName" placeholder="请输入通义千问模型名称如：qwen-turbo">
+            </div>
+            </div>
+            <div class="input-group">
+                <label for="email">PubMed 邮箱（Entrez）</label>
+                <input type="email" id="email" placeholder="请输入用于PubMed检索的邮箱（必填）">
+            </div>
+            <div class="input-group">
+                <label for="max_papers">设置一次检索最大数量</label>
+                <input type="number" id="max_papers" placeholder="请输入检索数量（默认为10）" value="10" min="1" max="100">
+                <div class="hint">建议范围：1-100，过大可能导致检索超时</div>
+            </div>
+        </div>
+
+        <!-- 检索关键词输入 -->
+        <div class="input-group">
+            <label for="keywords">📚 检索关键词</label>
+            <input type="text" id="keywords" placeholder="请输入英文检索关键词（如：diabetes RCT treatment）">
+        </div>
+
+        <button onclick="searchResearch()">开始检索分析</button>
+        <div id="result"></div>
+    </div>
+
+    <script>
+        // 监听模型选择框变化，显示/隐藏自定义输入框
+        document.getElementById("modelName").addEventListener("change", function() {
+            const customInput = document.getElementById("customModelName");
+            customInput.style.display = this.value === "custom" ? "block" : "none";
+        });
+
+        async function searchResearch() {
+            // 获取前端输入的配置和关键词
+            const keywords = document.getElementById("keywords").value.trim();
+            const apiKey = document.getElementById("apiKey").value.trim();
+            const baseUrl = document.getElementById("baseUrl").value.trim();
+            const email = document.getElementById("email").value.trim();
+            const max_papers = document.getElementById("max_papers").value.trim() || "10"; // 默认10
+            const modelName = document.getElementById("modelName").value.trim();
+            
+            const resultDiv = document.getElementById("result");
+            resultDiv.style.display = "block";
+
+            // 前置校验
+            if (!modelName) {
+                resultDiv.innerHTML = `<h3 class="warning">请输入模型名称！</h3>`;
+                return;
+            }
+            if (!keywords) {
+                resultDiv.innerHTML = `<h3 class="warning">请输入检索关键词！</h3>`;
+                return;
+            }
+            if (!apiKey) {
+                resultDiv.innerHTML = `<h3 class="warning">请输入LLM API Key！</h3>`;
+                return;
+            }
+            if (!baseUrl) {
+                resultDiv.innerHTML = `<h3 class="warning">请输入LLM Base URL！</h3>`;
+                return;
+            }
+            if (!email || !email.includes("@")) {
+                resultDiv.innerHTML = `<h3 class="warning">请输入有效的PubMed邮箱！</h3>`;
+                return;
+            }
+            if (isNaN(max_papers) || max_papers < 1) {
+                resultDiv.innerHTML = `<h3 class="warning">检索数量必须是大于0的数字！</h3>`;
+                return;
+            }
+
+            // 加载状态
+            resultDiv.innerHTML = `🚀 正在初始化Agent（模型：${modelName}）并检索文献...<br>请稍候（PubMed检索+LLM分析可能需要1-2分钟）`;
+
+            try {
+                // 发送POST请求，传递所有参数（JSON格式）
+                const response = await fetch("/research", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",  // 改为JSON格式传递
+                    },
+                    body: JSON.stringify({
+                        keywords: keywords,
+                        llm_config: {
+                            api_key: apiKey,
+                            base_url: baseUrl,
+                            model_name: modelName  
+                        },
+                        agent_config: {
+                            max_papers: parseInt(max_papers)  // 转为数字
+                        },
+                        pubmed_config: {
+                            email: email
+                        }
+                    })
+                });
+
+                const result = await response.json();
+                let html = `<h3 class="${result.chain_status || result.status}">${result.message}</h3>`;
+                
+                if (result.chain_status === "success") {
+                    // 拼接成功结果
+                    html += `
+                        <div style="margin-top:15px;">
+                            <p>✅ 使用模型：${modelName}</p>
+                            <p>✅ 检索到论文数量：${result.summary.total_papers}</p>
+                            <p>📊 主要研究方法：${result.summary.main_research_method}</p>
+                            <p>📈 生成可视化图表数：${result.summary.plot_count}</p>
+                            <p>📄 报告保存路径：<code>${result.summary.report_path}</code></p>
+                            
+                            <h4 style="margin-top:20px;">统计分析结果：</h4>
+                            <pre style="background:#f8f9fa;padding:10px;border-radius:4px;">${JSON.stringify(result.results.data_result.statistic, null, 2)}</pre>
+                            
+                            <h4 style="margin-top:20px;">可视化图表路径：</h4>
+                            <ul>${result.summary.plot_paths.map(path => `<li><code>${path}</code></li>`).join("")}</ul>
+                            
+                            <h4 style="margin-top:20px;">完整研究报告：</h4>
+                            <details style="margin-top:10px;">
+                                <summary>点击展开报告</summary>
+                                <pre style="background:#f8f9fa;padding:15px;border-radius:4px;margin-top:10px;">${result.results.report_result.report_content}</pre>
+                            </details>
+                        </div>
+                    `;
+                } else if (result.chain_status === "failed") {
+                    // 失败结果
+                    html += `
+                        <p>❌ 失败阶段：${result.stage}</p>
+                        <p>❌ 失败原因：${result.message}</p>
+                    `;
+                }
+
+                resultDiv.innerHTML = html;
+            } catch (e) {
+                resultDiv.innerHTML = `<h3 class="error">❌ 请求失败：${e.message}</h3>`;
+            }
+        }
+    </script>
+</body>
+</html>
