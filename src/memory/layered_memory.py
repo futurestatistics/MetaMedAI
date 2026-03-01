@@ -99,7 +99,12 @@ class LayeredMemoryStore:
             "journal": paper_meta.get("journal_name", ""),
             "year": str(paper_meta.get("publish_date", ""))[:4],
         }
-        return self.l3.add_report(report_id=report_id, report_content=report_content, metadata=metadata)
+        return self.l3.add_report(
+            report_id=report_id,
+            report_content=report_content,
+            metadata=metadata,
+            papers=papers,
+        )
 
     def search_l3_chunks(self, query: str, top_k: int = 5) -> List[Dict[str, Any]]:
         return self.l3.search(query=query, top_k=top_k)
