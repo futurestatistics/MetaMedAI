@@ -86,10 +86,6 @@ python app.py
 - 在生产环境请对 `reports/` 与 `data/` 路径设置持久化存储与权限管理。
 - 若需要高质量向量表示，请替换内置 `HashEmbeddings` 为更合适的 embeddings（例如 OpenAI/其他服务）。
 
----
-
-如需我把 README 扩展为英文版、加入运行示例截图或生成 Docker 部署说明（`docker-compose.yml` 已包含基础），我可以继续补充。
-
 # MetaMedAI（会话式多Agent版）
 
 ## 功能
