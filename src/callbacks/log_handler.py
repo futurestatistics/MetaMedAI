@@ -1,5 +1,5 @@
 import time
-from langchain.callbacks.base import BaseCallbackHandler
+from langchain_core.callbacks.base import BaseCallbackHandler
 from typing import Any, Dict, List
 
 class AgentLogHandler(BaseCallbackHandler):

@@ -1,6 +1,5 @@
-from langchain.chains import LLMChain
-from langchain.prompts import ChatPromptTemplate
-from langchain.schema import SystemMessage
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import StrOutputParser
 import json
 from typing import Dict, Any
 import os
@@ -16,52 +15,74 @@ class ReportAgent:
         self.save_path = config["agent"]["report"]["save_path"]
         os.makedirs(self.save_path, exist_ok=True)
 
-    def _init_chain(self) -> LLMChain:
-        """初始化报告生成链（精准定义报告结构）"""
+    def _init_chain(self):
+        """初始化报告生成链"""
         # 系统提示词：严格规定报告结构和内容要求
         system_prompt = """你是专业的医学科研报告生成专家，需整合文献分析和数据处理结果，生成结构化、专业的Markdown报告。
-        【核心要求】
-        1. 报告必须包含以下模块（按顺序）：
-           - 🔍 检索概述：包含检索关键词、文献总数、数据来源（PubMed）
-           - 📑 论文详情：逐篇列出每篇论文的「题目、发表时间、期刊名称、研究背景、研究方法（原文+分类）、研究结论」
-           - 📊 统计分析：展示「发表时间分布、研究方法分类分布、期刊分布、作者数量统计」
-           - 📈 可视化说明：列出生成的图表路径及对应的分析维度
-           - 🎯 核心结论：总结研究趋势（如哪种研究方法占比最高、发表时间趋势等）
-        2. 论文详情模块要求：
-           - 每篇论文单独分段，标注序号（如 1. 论文标题：XXX）
-           - 研究背景：基于论文标题+研究方法+结论，提炼1-2句话的背景（无则填「未明确提及」）
-           - 研究方法：同时展示原文和分类结果（如「原文：XXX | 分类：RCT研究」）
-        3. 统计分析模块要求：
-           - 用表格/列表形式展示分布数据，清晰易读
-           - 数值保留2位小数（如作者平均数量）
-        4. 格式要求：
-           - 全程使用Markdown格式，标题层级清晰（一级标题#，二级##，三级###）
-           - 语言专业、简洁，无冗余内容
-           - 避免使用口语化表达，符合科研报告规范
-        5. 数据缺失处理：
-           - 若某字段为空/未知，标注「未明确提及」
-           - 统计数据为空时标注「无有效数据」"""
+        
+          【字段优先级规则（必须遵守）】
+          对每篇论文，优先使用以下新字段：
+          1) 研究背景：优先使用 `background`；若缺失，再根据标题+方法+结论补写；仍不足则“未明确提及”。
+          2) 研究方法（中文概括）：优先使用 `methods_original`（该字段已是中文分条概括）。
+          3) 研究方法原文：优先使用 `methods_original_raw`；若缺失则显示“未明确提及”。
+          4) 研究结论（中文概括）：优先使用 `conclusion`（该字段已是中文分条概括）。
+          5) 研究结论原文：优先使用 `conclusion_raw`；若缺失则显示“未明确提及”。
+          6) 方法学分类：优先使用 `methods_classified`。
+          7) 局限性：优先使用 `limitations`；若缺失则“未明确提及”。
+
+          【核心要求】
+          1. 报告必须包含以下模块（按顺序）：
+              - 🔍 检索概述：包含检索关键词、文献总数、数据来源（PubMed）
+              - 📑 论文详情：逐篇列出每篇论文的「题目、发表时间、期刊名称、研究背景、研究方法（中文概括+原文+分类）、研究结论（中文概括+原文）、局限性、借鉴意义、锐评」
+              - 📊 统计分析：展示「发表时间分布、研究方法分类分布、期刊分布、作者数量统计」
+              - 🎯 核心结论：总结研究趋势（如哪种研究方法占比最高、发表时间趋势等）
+          2. 论文详情模块要求：
+              - 每篇论文单独分段，标注序号（如 1. 论文标题：XXX）
+              - 研究背景、研究方法、研究结论、局限性均优先直接复用输入字段，不要与原字段语义冲突
+              - “研究方法”必须拆为三行：
+                 - 中文概括：...
+                 - 原文：...
+                 - 分类：...
+              - “研究结论”必须拆为两行：
+                 - 中文概括：...
+                 - 原文：...
+              - 借鉴意义：总结该文献可落地借鉴点（1-2句）
+              - 锐评：指出局限、偏倚风险或外推边界（1-2句），优先结合`limitations`
+          3. 统计分析模块要求：
+              - 用表格/列表形式展示分布数据，清晰易读
+              - 数值保留2位小数（如作者平均数量）
+          4. 格式要求：
+              - 全程使用Markdown格式，标题层级清晰（一级标题#，二级##，三级###）
+              - 语言专业、简洁，无冗余内容
+              - 避免使用口语化表达，符合科研报告规范
+          5. 数据缺失处理：
+              - 若某字段为空/未知，标注「未明确提及」
+              - 统计数据为空时标注「无有效数据」"""
 
         # 用户提示词：明确传入参数格式
         user_prompt = """### 输入数据
-        【文献分析结果】：{literature_data}
+        【文献分析结果（含新字段）】：{literature_data}
         【数据处理结果】：{data_process_data}
         【检索关键词】：{keywords}
 
+        ### 新字段说明
+        - background：研究背景（中文分条）
+        - methods_original：研究方法中文分条概括
+        - methods_original_raw：研究方法原始文本（可能英文）
+        - conclusion：研究结论中文分条概括
+        - conclusion_raw：研究结论原始文本（可能英文）
+        - methods_classified：方法学分类
+        - limitations：局限性中文分条
+
         ### 输出要求
-        严格按照上述规则生成Markdown格式的科研报告，无需额外解释，直接输出报告内容。"""
+        严格按照系统规则生成Markdown报告；必须优先使用新字段，不要忽略。无需额外解释，直接输出报告内容。"""
 
         prompt = ChatPromptTemplate.from_messages([
-            SystemMessage(content=system_prompt),
+            ("system", system_prompt),
             ("user", user_prompt),
         ])
 
-        return LLMChain(
-            llm=self.llm,
-            prompt=prompt,
-            callbacks=[self.log_handler],
-            verbose=True  # 开启verbose便于调试
-        )
+        return prompt | self.llm | StrOutputParser()
 
     def _parse_input_data(self, data: str | Dict[str, Any]) -> Dict[str, Any]:
         """统一解析输入数据（兼容字符串/字典，处理JSON格式）"""
@@ -77,6 +98,55 @@ class ReportAgent:
             # 解析失败返回空字典，让LLM处理缺失
             return {}
 
+    def summarize_papers_for_memory(self, papers: list[dict]) -> list[dict]:
+        """由report_agent统一生成文献记忆条目，供chat阶段检索使用。"""
+        if not papers:
+            return []
+
+        payload = [
+            {
+                "title": p.get("title", ""),
+                "pmid": p.get("pmid", ""),
+                "doi": p.get("doi", ""),
+                "publish_date": p.get("publish_date", ""),
+                "journal_name": p.get("journal_name", ""),
+                "methods_original": p.get("methods_original", ""),
+                "conclusion": p.get("conclusion", ""),
+            }
+            for p in papers
+        ]
+
+        prompt = ChatPromptTemplate.from_messages([
+            (
+                "system",
+                "你是医学文献总结助手。请将输入文献转为结构化摘要，便于后续memory检索。"
+                "输出必须是JSON数组，每个元素包含title, summary, implication, critique。",
+            ),
+            ("user", "输入文献：{papers_json}"),
+        ])
+
+        chain = prompt | self.llm | StrOutputParser()
+        try:
+            raw = chain.invoke({"papers_json": json.dumps(payload, ensure_ascii=False)})
+            text = raw.strip()
+            if text.startswith("```"):
+                text = text.split("```")[1].replace("json", "").strip()
+            parsed = json.loads(text)
+            if isinstance(parsed, list):
+                return [item for item in parsed if isinstance(item, dict)]
+        except Exception:
+            pass
+
+        return [
+            {
+                "title": p.get("title", ""),
+                "summary": (p.get("conclusion") or "未明确提及")[:180],
+                "implication": "可作为后续研究设计与临床决策的参考证据。",
+                "critique": "摘要信息有限，仍需结合全文与样本质量评估。",
+            }
+            for p in papers
+        ]
+
     def run(self, keywords: str, literature_data: str | Dict[str, Any], data_process_data: str | Dict[str, Any]) -> Dict[str, Any]:
         """生成报告（适配Agent链输入，优化数据解析和保存）"""
         try:
@@ -85,7 +155,7 @@ class ReportAgent:
             data_data = self._parse_input_data(data_process_data)
 
             # 2. 生成报告内容（传入结构化参数）
-            report_content = self.chain.run({
+            report_content = self.chain.invoke({
                 "keywords": keywords,
                 "literature_data": json.dumps(lit_data, ensure_ascii=False, indent=2),
                 "data_process_data": json.dumps(data_data, ensure_ascii=False, indent=2)

@@ -2,234 +2,372 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>MetaMedAI</title>
+    <title>MetaMedAI Chat</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
     <style>
-        body {
-            max-width: 1000px;
-            margin: 0 auto;
-            padding: 20px;
-            font-family: Arial, sans-serif;
+        :root{
+            --primary: #0d6efd;
+            --muted: #6b7280;
+            --bg: #f5f7fb;
+            --card: #ffffff;
+            --accent: #60a5fa;
+            --soft: #eef2ff;
         }
-        .container {
-            margin-top: 30px;
+        html,body{height:100%;}
+        body { max-width: 1100px; margin: 20px auto; padding: 20px; font-family: 'Inter', Arial, sans-serif; background: linear-gradient(180deg,#f6f8fb 0%, #ffffff 100%); color:#0f172a; }
+        .layout { display: grid; grid-template-columns: 340px 1fr; gap: 18px; align-items:start; }
+        .panel { background: var(--card); border-radius: 12px; padding: 16px; box-shadow: 0 6px 18px rgba(15,23,42,0.06); border: none; }
+        .config .input-group { margin-bottom: 12px; }
+        label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; color: #0f172a; }
+        input, textarea { width: 100%; box-sizing: border-box; border: 1px solid #e6edf8; border-radius: 8px; padding: 10px; font-size:14px; background: #fbfdff; }
+        button { padding: 10px 14px; border-radius: 8px; font-weight:600; border: none; cursor: pointer; }
+        button.primary { background: var(--primary); color: #fff; }
+        button.ghost { background: transparent; color: var(--muted); border: 1px solid #e6edf8; }
+        button.primary:hover { filter:brightness(0.95); }
+        .chat-box { height: 500px; overflow-y: auto; background: linear-gradient(180deg,#fbfdff,#f8fbff); border-radius: 12px; padding: 12px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.6); }
+        .msg-row { display: flex; align-items: flex-start; gap: 8px; margin: 8px 0; }
+        .msg-row.user-row { justify-content: flex-end; }
+        .msg-row.user-row .avatar { order: 2; }
+        .msg-row.user-row .msg { order: 1; background: #dbeafe; }
+        .avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 15px;
+            font-weight: 700;
+            flex-shrink: 0;
+            color: white;
+            box-shadow: 0 2px 6px rgba(2,6,23,0.08);
         }
-        .input-group {
-            margin-bottom: 15px;
-        }
-        label {
-            display: block;
-            margin-bottom: 5px;
-            font-weight: bold;
+        .msg {
+            max-width: 78%;
+            padding: 10px 12px;
+            border-radius: 12px;
+            white-space: pre-wrap;
+            line-height: 1.6;
+            background: #ffffff;
+            border: 1px solid rgba(15,23,42,0.04);
+            box-shadow: 0 4px 12px rgba(2,6,23,0.04);
             font-size: 14px;
         }
-        input, select {
-            width: 100%;
-            padding: 10px;
-            font-size: 16px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            box-sizing: border-box;
-        }
-        button {
-            padding: 12px 24px;
-            font-size: 16px;
-            background-color: #007bff;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            margin-top: 10px;
-        }
-        button:hover {
-            background-color: #0056b3;
-        }
-        #result {
-            margin-top: 30px;
-            padding: 20px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
+        .msg.user { background: linear-gradient(90deg,var(--primary),var(--accent)); color: #fff; border: none; }
+        .msg.assistant { background: #ffffff; color: #0f172a; }
+        .loading-wrap {
+            position: sticky;
+            bottom: 12px;
+            margin: 12px 0 0 0;
+            padding: 10px 12px;
+            border-radius: 12px;
             display: none;
-            white-space: pre-wrap;
+            align-items: center;
+            gap: 12px;
+            background: linear-gradient(90deg, rgba(13,110,253,0.06), rgba(96,165,250,0.04));
+            border: 1px solid rgba(13,110,253,0.08);
         }
-        .success {
-            color: green;
+        .loading-text { font-size:13px; color:var(--primary); font-weight:600; }
+        .progress-track{ width:100%; height:8px; border-radius:999px; background:#e6eefc; overflow:hidden; }
+        .progress-bar{ width:35%; height:100%; background: linear-gradient(90deg, var(--primary), var(--accent)); border-radius:999px; animation: progressSlide 1.2s infinite ease-in-out; }
+        @keyframes progressSlide {
+            0% { transform: translateX(-120%); }
+            100% { transform: translateX(300%); }
         }
-        .error {
-            color: red;
-        }
-        .warning {
-            color: orange;
-        }
-        .config-group {
-            background-color: #f8f9fa;
-            padding: 15px;
-            border-radius: 4px;
-            margin-bottom: 20px;
-        }
-        pre {
-            white-space: pre-wrap;
-            word-wrap: break-word;
-            max-height: 500px;
-            overflow-y: auto;
-        }
-        .hint {
-            font-size: 12px;
-            color: #666;
-            margin-top: 3px;
-        }
+        .citation-link { color: var(--primary); text-decoration: none; cursor: pointer; font-weight:600 }
+        .citation-link:hover { text-decoration: underline; }
+        .meta { font-size: 12px; color: var(--muted); margin-top: 6px; }
+        .report { height: 280px; overflow-y: auto; background: linear-gradient(180deg,#fbfdff,#f8fbff); border-radius:10px; padding:12px; border:1px solid rgba(15,23,42,0.03); }
+        .citation-box { margin-top: 10px; padding: 8px; border: 1px solid #eee; border-radius: 8px; background: #fcfcfc; font-size: 13px; }
+        .row { display: flex; gap: 10px; }
+        .row button { width: auto; min-width: 120px; }
+        .small-muted{font-size:12px;color:var(--muted)}
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>MetaMedAI——医学文献检索总结助手</h1>
-        
-        <!-- 新增配置输入区域 -->
-        <div class="config-group">
-            <h3>🔧 Agent 配置</h3>
+    <h1>MetaMedAI 医学文献对话助手</h1>
+    <div class="layout">
+        <div class="panel config">
+            <h3>配置</h3>
             <div class="input-group">
                 <label for="apiKey">LLM API Key</label>
-                <input type="text" id="apiKey" placeholder="请输入通义千问API Key">
+                <input type="text" id="apiKey" placeholder="请输入API Key">
             </div>
             <div class="input-group">
                 <label for="baseUrl">LLM Base URL</label>
-                <input type="text" id="baseUrl" placeholder="请输入API Base URL（如：https://dashscope.aliyuncs.com/compatible-mode/v1）">
+                <input type="text" id="baseUrl" placeholder="如：https://dashscope.aliyuncs.com/compatible-mode/v1">
             </div>
             <div class="input-group">
-                <label for="modelName">通义千问模型名称</label>
-                <input type="text" id="modelName" placeholder="请输入通义千问模型名称如：qwen-turbo">
-            </div>
-            </div>
-            <div class="input-group">
-                <label for="email">PubMed 邮箱（Entrez）</label>
-                <input type="email" id="email" placeholder="请输入用于PubMed检索的邮箱（必填）">
+                <label for="modelName">模型名称</label>
+                <input type="text" id="modelName" placeholder="如：qwen-turbo">
             </div>
             <div class="input-group">
-                <label for="max_papers">设置一次检索最大数量</label>
-                <input type="number" id="max_papers" placeholder="请输入检索数量（默认为10）" value="10" min="1" max="100">
-                <div class="hint">建议范围：1-100，过大可能导致检索超时</div>
+                <label for="email">PubMed邮箱</label>
+                <input type="email" id="email" placeholder="必须可用邮箱">
             </div>
+            <div class="input-group">
+                <label for="max_papers">单次最多检索文献数</label>
+                <input type="number" id="max_papers" value="10" min="1" max="100">
+            </div>
+            <div class="input-group">
+                <label for="start_date">文献起始日期</label>
+                <input type="date" id="start_date">
+            </div>
+            <div class="input-group">
+                <label for="end_date">文献结束日期</label>
+                <input type="date" id="end_date">
+            </div>
+            <div class="meta" id="sessionMeta">会话ID：未创建</div>
         </div>
 
-        <!-- 检索关键词输入 -->
-        <div class="input-group">
-            <label for="keywords">📚 检索关键词</label>
-            <input type="text" id="keywords" placeholder="请输入英文检索关键词（如：diabetes RCT treatment）">
-        </div>
+        <div class="panel">
+            <h3>对话</h3>
+            <div id="chatBox" class="chat-box"></div>
+            <div id="loadingWrap" class="loading-wrap">
+                <div id="loadingText" class="loading-text">请稍等，正在准备检索...</div>
+                <div class="progress-track"><div class="progress-bar"></div></div>
+            </div>
+            <div style="margin-top:10px;">
+                <label for="message">消息</label>
+                <textarea id="message" rows="4" placeholder="例如：目前糖尿病治疗的研究趋势是什么？"></textarea>
+            </div>
+            <div class="row" style="margin-top:10px;">
+                <button onclick="sendMessage()">发送</button>
+                <button onclick="newSession()" style="background:#6c757d;">新会话</button>
+            </div>
 
-        <button onclick="searchResearch()">开始检索分析</button>
-        <div id="result"></div>
+            <h3 style="margin-top:16px;">报告预览（Markdown）</h3>
+            <div id="reportBox" class="report">尚未生成报告</div>
+            <div class="meta" id="reportMeta"></div>
+            <div id="citationBox" class="citation-box">点击回答中的[编号]可查看引用详情</div>
+        </div>
     </div>
 
     <script>
-        // 监听模型选择框变化，显示/隐藏自定义输入框
-        document.getElementById("modelName").addEventListener("change", function() {
-            const customInput = document.getElementById("customModelName");
-            customInput.style.display = this.value === "custom" ? "block" : "none";
-        });
+        let sessionId = null;
+        let latestCitations = {};
+        let loadingTimer = null;
+        let isSending = false;
 
-        async function searchResearch() {
-            // 获取前端输入的配置和关键词
-            const keywords = document.getElementById("keywords").value.trim();
-            const apiKey = document.getElementById("apiKey").value.trim();
-            const baseUrl = document.getElementById("baseUrl").value.trim();
-            const email = document.getElementById("email").value.trim();
-            const max_papers = document.getElementById("max_papers").value.trim() || "10"; // 默认10
-            const modelName = document.getElementById("modelName").value.trim();
-            
-            const resultDiv = document.getElementById("result");
-            resultDiv.style.display = "block";
+        function sanitizeAssistantText(text) {
+            if (!text) return '';
+            const internalPattern = /(未在\s*l2|未在\s*l3|未在\s*l2\s*,\s*l3|l2\s*\/\s*l3|memory\s*未命中|查找\s*l2|查找\s*l3|未命中\s*l2|未命中\s*l3)/i;
+            const cleanedLines = text
+                .split('\n')
+                .map(line => line.trim())
+                .filter(line => !internalPattern.test(line));
+            return cleanedLines.join('\n').trim() || '已为你完成检索并整理结果。';
+        }
 
-            // 前置校验
-            if (!modelName) {
-                resultDiv.innerHTML = `<h3 class="warning">请输入模型名称！</h3>`;
-                return;
-            }
-            if (!keywords) {
-                resultDiv.innerHTML = `<h3 class="warning">请输入检索关键词！</h3>`;
-                return;
-            }
-            if (!apiKey) {
-                resultDiv.innerHTML = `<h3 class="warning">请输入LLM API Key！</h3>`;
-                return;
-            }
-            if (!baseUrl) {
-                resultDiv.innerHTML = `<h3 class="warning">请输入LLM Base URL！</h3>`;
-                return;
-            }
-            if (!email || !email.includes("@")) {
-                resultDiv.innerHTML = `<h3 class="warning">请输入有效的PubMed邮箱！</h3>`;
-                return;
-            }
-            if (isNaN(max_papers) || max_papers < 1) {
-                resultDiv.innerHTML = `<h3 class="warning">检索数量必须是大于0的数字！</h3>`;
+        function setLoading(visible) {
+            const wrap = document.getElementById('loadingWrap');
+            const textNode = document.getElementById('loadingText');
+            if (!wrap || !textNode) return;
+
+            if (visible) {
+                wrap.style.display = 'block';
+                const tips = [
+                    '请稍等，正在准备检索...',
+                    '请稍等，正在检索记忆与历史报告...',
+                    '请稍等，若记忆不足将自动检索 PubMed...',
+                    '请稍等，正在生成结构化回答...'
+                ];
+                let idx = 0;
+                textNode.textContent = tips[idx];
+                loadingTimer = setInterval(() => {
+                    idx = (idx + 1) % tips.length;
+                    textNode.textContent = tips[idx];
+                }, 1800);
                 return;
             }
 
-            // 加载状态
-            resultDiv.innerHTML = `🚀 正在初始化Agent（模型：${modelName}）并检索文献...<br>请稍候（PubMed检索+LLM分析可能需要1-2分钟）`;
-
-            try {
-                // 发送POST请求，传递所有参数（JSON格式）
-                const response = await fetch("/research", {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",  // 改为JSON格式传递
-                    },
-                    body: JSON.stringify({
-                        keywords: keywords,
-                        llm_config: {
-                            api_key: apiKey,
-                            base_url: baseUrl,
-                            model_name: modelName  
-                        },
-                        agent_config: {
-                            max_papers: parseInt(max_papers)  // 转为数字
-                        },
-                        pubmed_config: {
-                            email: email
-                        }
-                    })
-                });
-
-                const result = await response.json();
-                let html = `<h3 class="${result.chain_status || result.status}">${result.message}</h3>`;
-                
-                if (result.chain_status === "success") {
-                    // 拼接成功结果
-                    html += `
-                        <div style="margin-top:15px;">
-                            <p>✅ 使用模型：${modelName}</p>
-                            <p>✅ 检索到论文数量：${result.summary.total_papers}</p>
-                            <p>📊 主要研究方法：${result.summary.main_research_method}</p>
-                            <p>📈 生成可视化图表数：${result.summary.plot_count}</p>
-                            <p>📄 报告保存路径：<code>${result.summary.report_path}</code></p>
-                            
-                            <h4 style="margin-top:20px;">统计分析结果：</h4>
-                            <pre style="background:#f8f9fa;padding:10px;border-radius:4px;">${JSON.stringify(result.results.data_result.statistic, null, 2)}</pre>
-                            
-                            <h4 style="margin-top:20px;">可视化图表路径：</h4>
-                            <ul>${result.summary.plot_paths.map(path => `<li><code>${path}</code></li>`).join("")}</ul>
-                            
-                            <h4 style="margin-top:20px;">完整研究报告：</h4>
-                            <details style="margin-top:10px;">
-                                <summary>点击展开报告</summary>
-                                <pre style="background:#f8f9fa;padding:15px;border-radius:4px;margin-top:10px;">${result.results.report_result.report_content}</pre>
-                            </details>
-                        </div>
-                    `;
-                } else if (result.chain_status === "failed") {
-                    // 失败结果
-                    html += `
-                        <p>❌ 失败阶段：${result.stage}</p>
-                        <p>❌ 失败原因：${result.message}</p>
-                    `;
-                }
-
-                resultDiv.innerHTML = html;
-            } catch (e) {
-                resultDiv.innerHTML = `<h3 class="error">❌ 请求失败：${e.message}</h3>`;
+            wrap.style.display = 'none';
+            if (loadingTimer) {
+                clearInterval(loadingTimer);
+                loadingTimer = null;
             }
         }
+
+        function parseCitationsToHtml(text) {
+            return (text || '').replace(/\[(\d+)\]/g, (m, num) => {
+                return `<a href="#" class="citation-link" data-citation="${num}">[${num}]</a>`;
+            });
+        }
+
+        function appendMessage(role, content, citations = null) {
+            const chatBox = document.getElementById('chatBox');
+            const row = document.createElement('div');
+            row.className = `msg-row ${role === 'user' ? 'user-row' : 'assistant-row'}`;
+
+            const avatar = document.createElement('div');
+            avatar.className = 'avatar';
+            avatar.textContent = role === 'user' ? '🧑' : '🤖';
+
+            const div = document.createElement('div');
+            div.className = `msg ${role}`;
+            const finalContent = role === 'assistant' ? sanitizeAssistantText(content) : content;
+            if (role === 'assistant' && citations) {
+                div.innerHTML = parseCitationsToHtml(finalContent);
+                div.querySelectorAll('.citation-link').forEach(link => {
+                    link.addEventListener('click', async (e) => {
+                        e.preventDefault();
+                        const displayId = e.target.dataset.citation;
+                        const citation = citations[displayId];
+                        if (!citation) {
+                            document.getElementById('citationBox').textContent = `未找到引用 [${displayId}]`;
+                            return;
+                        }
+                        try {
+                            const resp = await fetch(`/api/citation/${citation.citation_id}?session_id=${encodeURIComponent(sessionId || '')}`);
+                            const result = await resp.json();
+                            if (result.status !== 'success') {
+                                document.getElementById('citationBox').textContent = `引用查询失败：${result.message || '未知错误'}`;
+                                return;
+                            }
+                            const item = result.data;
+                            document.getElementById('citationBox').innerHTML = `
+                                <strong>[${displayId}] ${item.title || '未知标题'}</strong><br>
+                                PMID: ${item.pmid || '未提供'}<br>
+                                期刊: ${item.journal || '未知'} (${item.year || '未知'})<br>
+                                第一作者: ${item.first_author || '未知'}<br>
+                                摘要/结论: ${item.abstract || '未提供'}
+                            `;
+                        } catch (err) {
+                            document.getElementById('citationBox').textContent = `引用查询异常：${err.message}`;
+                        }
+                    });
+                });
+            } else {
+                div.textContent = finalContent;
+            }
+            row.appendChild(avatar);
+            row.appendChild(div);
+            chatBox.appendChild(row);
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        function setSessionMeta() {
+            document.getElementById('sessionMeta').textContent = `会话ID：${sessionId || '未创建'}`;
+        }
+
+        function newSession() {
+            sessionId = null;
+            latestCitations = {};
+            isSending = false;
+            setLoading(false);
+            setSessionMeta();
+            document.getElementById('chatBox').innerHTML = '';
+            document.getElementById('reportBox').textContent = '尚未生成报告';
+            document.getElementById('reportMeta').textContent = '';
+            document.getElementById('citationBox').textContent = '点击回答中的[编号]可查看引用详情';
+        }
+
+        function buildPayload() {
+            const message = document.getElementById('message').value.trim();
+            return {
+                message,
+                session_id: sessionId,
+                llm_config: {
+                    api_key: document.getElementById('apiKey').value.trim(),
+                    base_url: document.getElementById('baseUrl').value.trim(),
+                    model_name: document.getElementById('modelName').value.trim()
+                },
+                agent_config: {
+                    max_papers: parseInt(document.getElementById('max_papers').value || '10', 10),
+                    start_date: document.getElementById('start_date').value || null,
+                    end_date: document.getElementById('end_date').value || null
+                },
+                pubmed_config: {
+                    email: document.getElementById('email').value.trim()
+                }
+            };
+        }
+
+        async function loadReportByPath(reportPath) {
+            if (!reportPath) {
+                document.getElementById('reportBox').textContent = '未生成报告内容';
+                document.getElementById('reportMeta').textContent = '报告路径：无';
+                return;
+            }
+            const fileName = reportPath.split('/').pop().split('\\').pop();
+            const reportId = fileName.endsWith('.md') ? fileName.slice(0, -3) : fileName;
+            try {
+                const resp = await fetch(`/api/report/${encodeURIComponent(reportId)}`);
+                const result = await resp.json();
+                if (result.status !== 'success') {
+                    document.getElementById('reportBox').textContent = '报告读取失败';
+                    document.getElementById('reportMeta').textContent = `报告路径：${reportPath}`;
+                    return;
+                }
+                document.getElementById('reportBox').textContent = result.data.markdown_content || '未生成报告内容';
+                document.getElementById('reportMeta').textContent = `报告路径：${result.data.report_path || reportPath}`;
+            } catch (e) {
+                document.getElementById('reportBox').textContent = '报告读取异常';
+                document.getElementById('reportMeta').textContent = `报告路径：${reportPath}`;
+            }
+        }
+
+        async function sendMessage() {
+            if (isSending) {
+                return;
+            }
+            const payload = buildPayload();
+            if (!payload.message) {
+                alert('请输入消息');
+                return;
+            }
+
+            isSending = true;
+            const sendBtn = document.querySelector('button[onclick="sendMessage()"]');
+            const newSessionBtn = document.querySelector('button[onclick="newSession()"]');
+            if (sendBtn) {
+                sendBtn.disabled = true;
+                sendBtn.textContent = '处理中...';
+            }
+            if (newSessionBtn) {
+                newSessionBtn.disabled = true;
+            }
+
+            appendMessage('user', payload.message);
+            document.getElementById('message').value = '';
+            setLoading(true);
+
+            try {
+                const resp = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const result = await resp.json();
+                if (result.status !== 'success') {
+                    appendMessage('assistant', `请求失败：${result.message || '未知错误'}`);
+                    return;
+                }
+
+                sessionId = result.session_id;
+                setSessionMeta();
+                const data = result.data || {};
+                latestCitations = data.citations || {};
+                appendMessage('assistant', data.answer || '无回答内容', latestCitations);
+
+                const reportPath = data.markdown_path || '';
+                await loadReportByPath(reportPath);
+            } catch (e) {
+                appendMessage('assistant', `请求异常：${e.message}`);
+            } finally {
+                setLoading(false);
+                isSending = false;
+                if (sendBtn) {
+                    sendBtn.disabled = false;
+                    sendBtn.textContent = '发送';
+                }
+                if (newSessionBtn) {
+                    newSessionBtn.disabled = false;
+                }
+            }
+        }
+
+        setSessionMeta();
     </script>
 </body>
 </html>

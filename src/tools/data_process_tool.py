@@ -1,25 +1,20 @@
 import pandas as pd
-import matplotlib.pyplot as plt
 import numpy as np
-from langchain.tools import BaseTool
+from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
-from typing import List, Dict, Any
+from typing import ClassVar, List, Dict, Any
 import os
-
-# 设置中文字体
-plt.rcParams["font.sans-serif"] = ["SimHei"]
-plt.rcParams["axes.unicode_minus"] = False
 
 class DataProcessInput(BaseModel):
     papers_data: List[Dict[str, Any]] = Field(description="文献分析师返回的论文数据")
-    analysis_type: str = Field(default="stat", description="分析类型：stat(统计)/plot(可视化)")
+    analysis_type: str = Field(default="stat", description="分析类型：stat(统计)，plot参数将被忽略")
 
 class DataProcessTool(BaseTool):
-    name = "data_process"
-    description = """处理文献分析师返回的论文数据，支持：
-    1. 统计分析：文献数量、研究方法分类分布、发表时间分布、期刊分布
-    2. 可视化：研究方法分类饼图、发表时间趋势图、期刊分布柱状图"""
-    args_schema = DataProcessInput
+    name: ClassVar[str] = "data_process"
+    description: ClassVar[str] = """处理文献分析师返回的论文数据，支持：
+    1. 统计分析：文献数量、研究方法分类分布、发表时间分布、期刊分布、作者数量统计
+    2. 不生成图表，仅返回分布统计结果"""
+    args_schema: ClassVar[type[BaseModel]] = DataProcessInput
 
     config: Dict[str, Any] = Field(default_factory=dict)  # 配置字典，默认空字典
     plot_format: str = Field(default="png")  # 图表格式
@@ -37,7 +32,7 @@ class DataProcessTool(BaseTool):
             save_path=save_path
         )
         
-        # 创建保存目录（确保路径存在）
+        # 保持目录初始化兼容，但当前版本不写入图表
         os.makedirs(self.save_path, exist_ok=True)
 
     def _parse_publish_year(self, date_str: str) -> str:
@@ -56,8 +51,23 @@ class DataProcessTool(BaseTool):
             return "未知"
 
     def _run(self, papers_data: List[Dict[str, Any]], analysis_type: str = "all") -> Dict[str, Any]:
-        """执行数据处理（适配literature_agent的输出字段）"""
+        """执行数据处理（适配literature_agent的输出字段，仅做统计不绘图）。"""
         try:
+            if not papers_data:
+                return {
+                    "status": "warning",
+                    "message": "没有可分析的论文数据",
+                    "statistic": {
+                        "total_papers": 0,
+                        "methods_classified_distribution": {},
+                        "publish_year_distribution": {},
+                        "journal_distribution": {},
+                        "author_count_stat": {"avg": 0.0, "max": 0, "min": 0},
+                    },
+                    "plot_paths": [],
+                    "plot_count": 0,
+                }
+
             # 数据清洗（核心：匹配literature_agent的字段）
             df = pd.DataFrame(papers_data)
             # 填充缺失值
@@ -92,57 +102,14 @@ class DataProcessTool(BaseTool):
                 }
             }
 
-            # 可视化
             plot_paths = []
-            if analysis_type in ["plot", "all"]:
-                # 研究方法分类分布饼图
-                plt.figure(figsize=(10, 6))
-                method_counts = df["methods_classified"].value_counts()
-                # 解决空值/无数据问题
-                if not method_counts.empty:
-                    method_counts.plot(kind="pie", autopct="%1.1f%%", startangle=90)
-                    plt.title("研究方法分类分布", fontsize=12)
-                    plt.ylabel("")
-                    plt.tight_layout()
-                    pie_path = os.path.join(self.save_path, "methods_classified_distribution." + self.plot_format)
-                    plt.savefig(pie_path, dpi=300, bbox_inches="tight")
-                    plot_paths.append(pie_path)
-                plt.close()
-
-                # 发表年份分布柱状图
-                plt.figure(figsize=(12, 6))
-                year_counts = df["publish_year"].value_counts().sort_index()
-                if not year_counts.empty:
-                    year_counts.plot(kind="bar", color="#1f77b4")
-                    plt.title("论文发表年份分布", fontsize=12)
-                    plt.xlabel("年份")
-                    plt.ylabel("论文数量")
-                    plt.xticks(rotation=45)
-                    plt.tight_layout()
-                    year_path = os.path.join(self.save_path, "publish_year_distribution." + self.plot_format)
-                    plt.savefig(year_path, dpi=300, bbox_inches="tight")
-                    plot_paths.append(year_path)
-                plt.close()
-
-                # 作者数量分布直方图
-                plt.figure(figsize=(10, 6))
-                author_counts = df["author_count"].values
-                if len(author_counts) > 0:
-                    plt.hist(author_counts, bins=min(10, len(author_counts)), edgecolor="black", alpha=0.7)
-                    plt.title("论文作者数量分布", fontsize=12)
-                    plt.xlabel("作者数量")
-                    plt.ylabel("论文数量")
-                    plt.tight_layout()
-                    author_path = os.path.join(self.save_path, "author_count_distribution." + self.plot_format)
-                    plt.savefig(author_path, dpi=300, bbox_inches="tight")
-                    plot_paths.append(author_path)
-                plt.close()
 
             return {
                 "status": "success",
-                "message": f"数据处理完成：共分析{len(df)}篇论文，生成{len(plot_paths)}张可视化图表",
+                "message": f"数据处理完成：共分析{len(df)}篇论文，已返回分布统计（未生成图表）",
                 "statistic": stat_result,
-                "plot_paths": plot_paths
+                "plot_paths": plot_paths,
+                "plot_count": len(plot_paths),
             }
 
         except Exception as e:

@@ -1,9 +1,7 @@
-import requests
 import xml.etree.ElementTree as ET
-from langchain.tools import BaseTool
+from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
-from typing import List, Dict, Any
-import os
+from typing import ClassVar, Dict, Any
 from Bio import Entrez  # Biopython简化PubMed检索
 
 RESEARCH_METHOD_TYPES = [
@@ -12,12 +10,15 @@ RESEARCH_METHOD_TYPES = [
 
 class PubMedSearchInput(BaseModel):
     keywords: str = Field(description="检索关键词")
-    # max_results: int = Field(default=10, description="最大检索论文数量")
+    start_date: str | None = Field(default=None, description="发表起始日期，格式YYYY/MM/DD")
+    end_date: str | None = Field(default=None, description="发表结束日期，格式YYYY/MM/DD")
+    retstart: int = Field(default=0, description="结果偏移量")
+    sort: str = Field(default="relevance", description="排序方式：relevance/pub date")
 
 class PubMedSearchTool(BaseTool):
-    name = "pubmed_search"
-    description = "检索PubMed数据库获取相关论文，返回题目、研究方法、结论等信息"
-    args_schema = PubMedSearchInput
+    name: ClassVar[str] = "pubmed_search"
+    description: ClassVar[str] = "检索PubMed数据库获取相关论文，返回题目、研究方法、结论等信息"
+    args_schema: ClassVar[type[BaseModel]] = PubMedSearchInput
     max_papers: int = Field(default=10, description="最大检索论文数量")
     
     
@@ -50,6 +51,11 @@ class PubMedSearchTool(BaseTool):
             return "-".join(parts) if parts else "未知"
         return "未知"
 
+    def _normalize_pubmed_date(self, date_text: str | None) -> str | None:
+        if not date_text:
+            return None
+        return date_text.replace("-", "/")
+
     def _extract_journal_name(self, article: ET.Element) -> str:
         """提取期刊名称"""
         journal = article.find(".//Journal/Title")
@@ -77,19 +83,52 @@ class PubMedSearchTool(BaseTool):
         
         return abstract_sections
 
-    def _run(self, keywords: str) -> Dict[str, Any]:
+    def _extract_article_id(self, medline_citation: ET.Element, pubmed_article: ET.Element, id_type: str) -> str:
+        if id_type == "pmid":
+            pmid = medline_citation.find("PMID")
+            return pmid.text.strip() if pmid is not None and pmid.text else ""
+
+        for node in pubmed_article.findall(".//PubmedData/ArticleIdList/ArticleId"):
+            if node.get("IdType", "").lower() == id_type and node.text:
+                return node.text.strip()
+        return ""
+
+    def _run(
+        self,
+        keywords: str,
+        start_date: str | None = None,
+        end_date: str | None = None,
+        retstart: int = 0,
+        sort: str = "relevance",
+    ) -> Dict[str, Any]:
         """执行PubMed检索（完善字段提取）"""
         try:
+            search_kwargs = {
+                "db": "pubmed",
+                "term": keywords,
+                "retmax": self.max_papers,
+                "retstart": max(0, retstart),
+                "sort": sort,
+            }
+            norm_start_date = self._normalize_pubmed_date(start_date)
+            norm_end_date = self._normalize_pubmed_date(end_date)
+            if norm_start_date and norm_end_date:
+                search_kwargs["datetype"] = "pdat"
+                search_kwargs["mindate"] = norm_start_date
+                search_kwargs["maxdate"] = norm_end_date
+
             # 检索论文ID
-            handle = Entrez.esearch(
-                db="pubmed",
-                term=keywords,
-                retmax=self.max_papers,
-                sort="relevance"
-            )
+            handle = Entrez.esearch(**search_kwargs)
             record = Entrez.read(handle)
             handle.close()
             id_list = record["IdList"]
+
+            if not id_list:
+                return {
+                    "status": "warning",
+                    "message": "未检索到文献，请调整关键词或时间范围",
+                    "data": [],
+                }
             
             # 数量校验
             # if len(id_list) < self.min_papers:
@@ -112,15 +151,30 @@ class PubMedSearchTool(BaseTool):
             # 解析论文信息（完善字段）
             root = ET.fromstring(xml_data)
             papers = []
-            for article in root.findall(".//PubmedArticle/MedlineCitation/Article"):
+            for pubmed_article in root.findall(".//PubmedArticle"):
+                medline_citation = pubmed_article.find("MedlineCitation")
+                article = medline_citation.find("Article") if medline_citation is not None else None
+                if article is None:
+                    continue
+
                 abstract_info = self._extract_abstract_sections(article)
+                title_node = article.find("ArticleTitle")
+                title_text = "未知标题"
+                if title_node is not None:
+                    title_text = "".join(title_node.itertext()).strip() or "未知标题"
+
+                doi = self._extract_article_id(medline_citation, pubmed_article, "doi")
+                pmid = self._extract_article_id(medline_citation, pubmed_article, "pmid")
                 
                 paper = {
-                    "title": article.find("ArticleTitle").text.strip() if article.find("ArticleTitle") is not None else "未知标题",
+                    "title": title_text,
                     "publish_date": self._extract_publish_date(article),  # 发表时间
                     "journal_name": self._extract_journal_name(article),  # 期刊名
                     "methods_original": abstract_info["methods"],  # 研究方法原文
                     "conclusion": abstract_info["conclusion"],
+                    "doi": doi,
+                    "pmid": pmid,
+                    "source": "PubMed",
                     "authors": [
                         f"{author.find('LastName').text} {author.find('Initials').text}" 
                         for author in article.findall("AuthorList/Author") 
@@ -132,6 +186,7 @@ class PubMedSearchTool(BaseTool):
             return {
                 "status": "success",
                 "message": f"成功检索到{len(papers)}篇论文",
+                "query": keywords,
                 "data": papers
             }
 

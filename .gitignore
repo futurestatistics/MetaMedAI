@@ -30,3 +30,4 @@ config.local.json
 # 忽略临时文件
 plots/
 reports/
+data/
