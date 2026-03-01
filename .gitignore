@@ -31,3 +31,4 @@ config.local.json
 plots/
 reports/
 data/
+multi_agent_architecture.md

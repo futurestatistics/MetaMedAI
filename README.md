@@ -19,7 +19,7 @@
 - `requirements.txt` — 依赖清单（建议创建虚拟环境安装）。
 - `templates/index.html` — 前端聊天界面。
 - `src/agents/` — 各 Agent 实现：`orchestrator_agent.py`, `intent_agent.py`, `memory_retrieval_agent.py`, `literature_agent.py`, `data_agent.py`, `report_agent.py`, `answer_generation_agent.py` 等。
-- `src/memory/` — 分层记忆实现：`l1_memory.py`, `l2_memory.py`, `l3_rag.py`, `layered_memory.py`, `conversation_memory.py`。
+- `src/memory/` — 分层记忆实现：`l1_memory.py`, `l2_memory.py`, `l3_rag.py`, `layered_memory.py`。
 - `src/tools/` — 工具（如 `data_process_tool.py`, `pubmed_tool.py`），由 MCP server 暴露。
 - `src/mcp/` — 本地 MCP server/client 实现，用以统一调用外部工具。
 - `reports/` — 生成的 Markdown 报告保存路径。
@@ -68,7 +68,6 @@ python app.py
 - `POST /api/chat` — 发送用户消息，后端返回回答、session_id、引用与报告路径。Payload 包含 `message`, `session_id` (可空), `llm_config`, `agent_config`, `pubmed_config`。
 - `GET /api/report/<id>` — 获取生成的 Markdown 报告内容（通过 `layered_memory_store.get_report_path` 注册并读取）。
 - `GET /api/citation/<citation_id>` — 获取单条引用的详情（由 `LayeredMemoryStore` 管理）。
-- `POST /research` 等内部接口用于批量/离线研究任务（详见 `app.py`）。
 
 ---
 
@@ -106,7 +105,6 @@ python app.py
 - `GET /api/citation/<citation_id>`：获取引用详情
 - `GET /api/report/<report_id>`：获取报告Markdown内容
 - `POST /chat`：兼容旧接口
-- `POST /research`：兼容旧的一次性关键词入口
 
 ## 启动
 

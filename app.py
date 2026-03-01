@@ -10,7 +10,6 @@ else:
         return _app
 
 from src.agents.orchestrator_agent import OrchestratorAgent
-from src.chains.router_chain import ResearchRouterChain
 from src.memory.layered_memory import layered_memory_store
 
 # 初始化Flask应用
@@ -193,37 +192,6 @@ def get_report(report_id: str):
     except Exception as exc:
         return jsonify({"status": "error", "message": f"获取报告失败：{str(exc)}"}), 500
 
-
-@app.route("/research", methods=["POST"])
-def research():
-    """兼容旧接口：将keywords作为首条消息执行一次完整链。"""
-    try:
-        request_data = request.get_json() or {}
-        keywords = request_data.get("keywords", "").strip()
-        if not keywords:
-            return jsonify({
-                "chain_status": "failed",
-                "stage": "params",
-                "message": "检索关键词不能为空",
-            }), 400
-
-        config = _build_runtime_config(request_data)
-        config_error = _validate_runtime_config(config)
-        if config_error:
-            return jsonify({
-                "chain_status": "failed",
-                "stage": "params",
-                "message": config_error,
-            }), 400
-
-        chain = ResearchRouterChain(config)
-        return jsonify(chain.run(keywords))
-    except Exception as exc:
-        return jsonify({
-            "chain_status": "failed",
-            "stage": "server",
-            "message": f"服务器处理失败：{str(exc)}",
-        }), 500
 
 if __name__ == "__main__":
     # 启动Flask服务（调试模式，生产环境需关闭）
